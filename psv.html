@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+ 
+<head>
+  <meta charset="utf-8">
+  <title>Pエディタ</title>
+  <link rel="stylesheet" type="text/css" href='handsontable.full.css'>
+  <script src='jquery-1.11.1.min.js'></script>
+  <script src='handsontable.full.js'></script>
+  <script src='encording.js'></script>
+</head>
+<label id="設定>
+<select id="newlinecode">
+<option value="AUTO">(AUTO)</option>
+<option value="CRLF">CR+LF</option>
+<option value="LF">LF (UNIX)</option>
+<option value="CR">CR (Mac)</option>
+</select>
+<select id="charset">
+<option value="AUTO">(AUTO)</option>
+<option value="Shift_JIS">SJIS</option>
+<option value="JIS">JIS</option>   //{KkJIS_X0201 JIS_EncodinghKBc_iso-2022-jpとは違うらしいが結局わからず
+<option value="EUC-JP">EUC</option>
+<option value="UTF-16">Unicode</option>
+<option value="UTF-16BE">UnicodeBE</option>
+<option value="UTF-8">UTF-8</option>
+<option value="UTF-7">UTF-7(非推奨)</option>
+<option value="ISO-8859-1">Latin1(非推奨)</option>
+</select>
+<select id="delimiter">
+<option value="AUTO">(拡張子から判断)</option>
+<option value="P">可変長空白 - P*-separated values(PSV)</option> <!--//padding,python,producer,八王子リスペクトetc...-->
+<option value="0x2C">カンマ - comma-separated values(CSV)</option>
+<option value="0x09">タブ - tab-separated values (TSV)</option>
+<option value="0x20">スペース - space-separated values (SSV)</option>
+<option value="0x3B">セミコロン - semicolon-separated values (SSV)</option>
+<option value="0x3A">コロン - colon-separated values (CSV)</option>
+</select>
+<label for="outputcheck">
+<input type="checkbox" checked="checked" id="outputcheck" value=1>文字コードに合わせたバイト数で計算</label>
+<label for="headercheck">
+<input type="checkbox" checked="checked" id="headercheck" value=1>ヘッダーを含める
+</label>
+インデントの数:<input type="number" id="padding" value=4 min=1>  <!--//windowsphone iphone androidでは電話番号になり同じ数字を二回も打つ必要がなくなるぞ-->
+</label>
+<input type="file" id="import-file">
+<button id="export" class="btn size-medium bg-blue text-white shadow hover-moveup" disabled>ｨｯｹﾝ・</button>
+<div id="handsontable" class="handsontable"></div>
+
+<script>
+//行と列の配置転換をそのうち
+var data;
+var hot;
+var encordcharsetico={ 
+SJIS   :'Shift_JIS', 
+JIS    :'JIS', 
+EUCJP  :'EUC-JP', 
+UTF16  :'UTF-16', 
+UTF16BE:'UTF-16BE', 
+UTF16LE:'UTF-16', 
+UNICODE:'ISO-8859-1',    //補足するとこれは間違いでencording.jsでは(JavaScript Unicode Array)となりunicodeのなかのなにかということだが、ISO-8859-1はサクラエディタのLatin1でencording.jsではこれを直接サポートしていない。そもそも滅多に使われるものではないのでくっつけた。
+UTF8   :'UTF-8',
+BINARY :'UTF-7',        // 同様
+UTF32  :'AUTO',
+ASCII  :'AUTO'
+};
+var charsetencordico={//charsetencordicoとencordcharseticoの２つの変換辞書があるのは不可逆でUTF32''BINARY''ASCII'は検知しかできないから。
+'Shift_JIS'  :'SJIS'   ,
+'JIS'        :'JIS'    ,
+'EUC-JP'     :'EUCJP'  ,
+'UTF-16'     :'UTF16'  ,
+'UTF-16BE'   :'UTF16BE',
+'ISO-8859-1' :'UNICODE',
+'UTF-8'      :'UTF8'    ,
+'UTF-7'      :'UNICODE',
+'AUTO'       :'UNICODE'
+}
+
+var filename;
+/*サクラエディタラブ勢なのでサクラエディタに準拠してちるが、肝心のサクラエディタがこんな感じ。
+ﾆSJIS
+Shift_JISnﾕ｡､・Wfｭｼ~Y 
+Shift_JISoWindowsn 埋j�Wｳ・jng     ﾛ端Zkｭｼ~Y 
+�Wｳ・n    ﾛ鱈D_OjD4 o S健x堵
+UD 
+
+ﾆJIS
+JISｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+
+ﾆEUC
+EUCｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+
+ﾆUnicode
+Unicodejｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+_v灘,杆K・gM~[・
+・蜉~[・
+
+ﾆUnicodeBE
+Unicode(Big Endian)jｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+_v灘,杆K・gM~[・
+・蜉~[・
+
+ﾆUTF-8
+Unicode(UTF-8)jｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+_v灘,杆K・gM~[・
+・蜉~[・
+
+ﾆUTF-7
+Unicode(UTF-7)jｳ・nﾕ｡､・Wfｭｼ~Y 
+ﾕ｡､・ｭｼ伝怨閼kShift_JISk    ﾛWf｡ W~Y 
+_v灘,杆K・gM~[・
+・蜉~[・*/
+document.onload=function(){        //OSごとの処理。特に意味はない。
+//http://www9.plala.or.jp/oyoyon/html/script/platform.html
+var os, ua = navigator.userAgent;
+    if (ua.match(/Windows Phone/)) {
+    document.getElementById('import-file').type="tel";
+    os = "Windows Phone";                // Windows Phone (Windows 10 Mobile) n・
+    }
+    else if (ua.match(/iPhone|iPad/)) {
+    document.getElementById('import-file').type="tel";
+    os = "iOS";                    // iOS (iPhone, iPod touch, iPad) n・
+    }
+    else if (ua.match(/Android ([\.\d]+)/)) {
+    document.getElementById('import-file').type="tel";
+    os = "Android " + RegExp.$1;            // Android n・
+    }
+}
+document.getElementById('outputcheck').addEventListener("click",function(){document.getElementById('outputcheck').value*=-1})
+document.getElementById('headercheck').addEventListener("click",function(){document.getElementById('headercheck').value*=-1})
+document.getElementById('import-file').addEventListener("change",function(evt){
+  function readfile(){      //この書き方でいいのか
+    reader.readAsText(file[0],document.getElementById('charset').value);
+    reader.onload = function(ev){
+        var L =[];//もともと行列
+        var  列=[];
+        var paddingcount=parseInt(document.getElementById('padding').value);
+        var newlinecode=(document.getElementById('newlinecode').value == "CRLF") ? '\r\n' : (document.getElementById('newlinecode').value == "CR") ? '\r' : '\n';   //デフォルトではLFで入力        // var newlinecode=document.getElementById('newlinecode').value;としたかった
+        if(document.getElementById('delimiter').value=="AUTO"){      //この4種類以外はPSVとして認識
+            switch (filename.match(/[^\.]+$/)[0]) { 
+            case 'psv':document.getElementById('delimiter').value="P"   ;break;
+            case 'csv':document.getElementById('delimiter').value="0x2C";break;
+            case 'tsv':document.getElementById('delimiter').value="0x09";break;
+            case 'ssv':document.getElementById('delimiter').value="0x20";break;
+            default   :document.getElementById('delimiter').value="P"   ;break;
+            }
+        }
+        
+        var delimiter=String.fromCharCode(document.getElementById('delimiter').value);
+        if(document.getElementById('delimiter').value=="P"){   //psvのインポート。だれかいいアルゴリズムあったら        var reg = new RegExp((" ").repeat(paddingcount),"g");
+        var str = reader.result.replace(reg, String.fromCharCode(6174)); //kaprekarp        console.log(.charCodeAt(0));
+        var rows = str.split(newlinecode);  
+        var  p=0;//もともと列数
+        delimiter=String.fromCharCode(6174);
+            for (  var j = 0;  j < rows.length;  j++  ) {
+             列=[];
+              for (  var k = 0;  k < str.split(newlinecode)[j].split(delimiter).length;  k++  ) {  
+               列.push(str.split(newlinecode)[j].split(delimiter)[k]);
+              if( p< 列.length)  p= 列.length;
+              }
+            L .push( 列);
+            }
+            for (  var j = 0;  j < rows.length;  j++  ) {
+              for (  var k = 0;  k < str.split(newlinecode)[j].split(delimiter).length;  k++  ) {  
+              L [j][k]=L [j][k].replace(/^ +/g,'');   
+              }
+            }
+            var maxcolumns=[0];  // 列のバイト数
+            for (  var k = 0;  k <  p;  k++  ) {
+                for (  var j = 0;  j < rows.length;  j++  ) {
+                    if(L [j][k])if(maxcolumns[k]<getByteLength(L [j][k])) maxcolumns[k]=getByteLength(L [j][k]);
+            }
+            
+        }else{
+            var str = reader.result;
+            var rows = str.split(newlinecode);
+            for (  var j = 0;  j < rows.length;  j++  ) {
+             列=[];
+              for (  var k = 0;  k < str.split(newlinecode)[j].split(delimiter).length;  k++  ) {  
+               列.push(str.split(newlinecode)[j].split(delimiter)[k]);
+              }
+            L .push( 列);
+            }
+        }
+        var headers=[];
+        if(document.getElementById('headercheck').value==1){       //H-坪ﾃﾀ・+° 
+        for(i=0; i<L [0].length; i++)headers.push( { title: L [0][i] } );            //SSｹﾞ・kj遠KW・        L .shift();
+        }else headers=L 
+        
+        data = L ,   //hkAWｼ�ﾇ・丁ｩW~Y 
+        container = document.getElementById('handsontable'),  //鶏ih旦戯求 ・・        hot;
+        hot = new Handsontable(container, {      //・oﾇ・ 喇h:ｪﾗｷ銛
+            data: data,            //UcM\c_data・・            minSpareRows: 1,       //hn hot.data=data;
+        
+        document.getElementById('export').disabled=false;
+    }
+  }
+  var file = evt.target.files;
+
+  filename=file[0].name
+  //FileReadern\ 
+  var reader = new FileReader();
+  if(document.getElementById('charset').value=="AUTO"){   //AUTOになっている場合はいったんファイルを読み込んで文字コードを判定してから再読み込み
+  reader.readAsArrayBuffer(file[0]);
+      reader.onload = function(ev){
+      var array = new Uint8Array(reader.result);
+          if(document.getElementById('newlinecode').value=="AUTO"){
+              if(array.indexOf( 13 )){
+              document.getElementById('newlinecode').value="LF";  //LFn・
+              if(array[array.indexOf( 13 )+1]==10)document.getElementById('newlinecode').value="CRLF";  //CRLFn・
+              }else{
+              if(array.indexOf( 10 ))document.getElementById('newlinecode').value="CR"  //CRn・
+              }
+          }
+      document.getElementById('charset').value=encordcharsetico[Encoding.detect(array)];
+      readfile()
+      }
+  }else{
+      if(document.getElementById('newlinecode').value=="AUTO"){
+          reader.readAsArrayBuffer(file[0]);
+          reader.onload = function(ev){
+          var array = new Uint8Array(reader.result);
+              if(array.indexOf( 13 )){
+              document.getElementById('newlinecode').value="LF";  //LFn・
+              if(array[array.indexOf( 13 )+1]==10)document.getElementById('newlinecode').value="CRLF";  //CRLFn・
+              }else{
+              if(array.indexOf( 10 ))document.getElementById('newlinecode').value="CR"  //CRn・
+              }
+          readfile(); 
+          }
+      }else   readfile();      //]nﾖo�Wｳ・綻n~~ｭｼ
+  }
+})
+
+function getByteLength(str){
+  str = (!str)?"":str;
+  if(document.getElementById('outputcheck').value==1)  return Encoding.convert(Encoding.urlDecode(encodeURIComponent(str)), charsetencordico[document.getElementById('charset').value], 'AUTO').length;
+  return encodeURI(str).replace(/%../g, "*").length;
+}
+var handsontable2psv = {
+//SSkBc_Ｏhttps://github.com/juantascon/jquery-handsontable-csv/blob/master/jquery.handsontable.csv.js
+    string: function(instance) {
+        var paddingcount=parseInt(document.getElementById('padding').value);
+        var newlinecode=(document.getElementById('newlinecode').value == "CR") ? '\r' : (document.getElementById('newlinecode').value == "LF") ? '\n' : '\r\n'; //ﾇﾕｩ・oCRLFg��
+        if(document.getElementById('delimiter').value=="P"||document.getElementById('delimiter').value=="AUTO"){
+            var maxcolumns=[];
+            for (var k = 0; k < instance.countRows(); k++) {
+            maxcolumns.push(0);
+                if(document.getElementById('headercheck').value==1){       //ﾘﾃﾀ・�婪吃M
+                    if(instance.getColHeader(k))if(maxcolumns[k]<getByteLength(instance.getColHeader(k)))maxcolumns[k]=getByteLength(instance.getColHeader(k))
+                }
+                for (var j = 0; j < instance.countCols(); j++) {
+                    if(instance.getDataAtCell(j,k))if(maxcolumns[k]<getByteLength(instance.getDataAtCell(j,k)))maxcolumns[k]=getByteLength(instance.getDataAtCell(j,k))
+                }
+            }
+            var psv='';
+            if(document.getElementById('headercheck').value==1){       //ﾘﾃﾀ・�婪吃M
+                for (var k = 0; k < instance.countCols(); k++) {
+                   if(instance.getColHeader(k)==null||instance.getColHeader(k)==undefined ){ //0o%
+                   psv +=(" ").repeat(maxcolumns[k]+paddingcount);
+                   }else{
+                   psv +=instance.getColHeader(k)+(" ").repeat(maxcolumns[k]+paddingcount-getByteLength(instance.getColHeader(k).toString()));
+                   }
+                }
+                psv += newlinecode;
+            }
+            for (var j = 0; j < instance.countRows(); j++) {
+                for (var k = 0; k < instance.countCols(); k++) {
+                    if(instance.getDataAtCell(j,k)==null||instance.getDataAtCell(j,k)==undefined ){ //0o%
+                    psv +=(" ").repeat(maxcolumns[k]+paddingcount);
+                    }else{
+                    psv +=instance.getDataAtCell(j,k)+(" ").repeat(maxcolumns[k]+paddingcount-getByteLength(instance.getDataAtCell(j,k).toString()));
+                    }
+                }
+                psv += newlinecode;        
+            }
+            return psv;
+        }else{  
+        var delimiter=String.fromCharCode(document.getElementById('delimiter').value);
+        regexp = new RegExp(delimiter + '$');
+        var variousv='';
+        if(document.getElementById('headercheck').value==1){       //ﾘﾃﾀ・�婪吃M
+            for (var k=0;  k < instance.countCols(); k++) {
+                if(instance.getColHeader(k)!=null&&instance.getColHeader(k)!=undefined )variousv += instance.getColHeader(k)+delimiter;
+            }
+            variousv=variousv.replace(RegExp,'');
+            variousv+=newlinecode;
+        }
+            for (var j = 0; j < instance.countRows(); j++) {
+                for (var k=0;  k < instance.countCols(); k++) {
+                    if(instance.getDataAtCell(j,k)!=null&&instance.getDataAtCell(j,k)!=undefined )variousv += instance.getDataAtCell(j,k)+delimiter;
+                }
+                variousv=variousv.replace(RegExp,'');
+                variousv+=newlinecode;
+            }
+            return variousv;
+        }
+    },
+    download: function(instance) {
+/さんきゅーhttps://kuroeveryday.blogspot.com/2016/05/file-download-from-browser.html
+        var psv = handsontable2psv.string(instance)
+        var mimeType = 'text/plain';
+        switch (document.getElementById('delimiter').value) {  //三項演算子のほうがよさげ？
+        case "P"   :var erweiterung='psv';break;
+        case "0x2C":var erweiterung='csv';break;
+        case "0x09":var erweiterung='tsv';break;
+        case "0x20":var erweiterung='ssv';break;
+        case "0x3B":var erweiterung='ssv';break;
+        case "0x3A":var erweiterung='csv';break;
+        default    :var erweiterung=''   ;break;
+        }
+        var name     = filename.replace(/[^\.]+$/,'') + erweiterung ;
+
+
+        // BOMo�W Q�V
+        var bom  = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        var blob = new Blob([bom, psv], {type : mimeType});
+
+        var a = document.createElement('a');
+        a.download = name;
+        a.target   = '_blank';
+
+        if (window.navigator.msSaveBlob) {
+          // for IE
+          window.navigator.msSaveBlob(blob, name)
+        }
+        else if (window.URL && window.URL.createObjectURL) {
+          // for Firefox
+          a.href = window.URL.createObjectURL(blob);
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+        else if (window.webkitURL && window.webkitURL.createObject) {
+          // for Chrome
+          a.href = window.webkitURL.createObjectURL(blob);
+          a.click();
+        }
+        else {
+          // for Safari
+          window.open('data:' + mimeType + ';base64,' + window.Base64.encode(psv), '_blank');
+        }
+
+    }
+}
+document.getElementById('export').addEventListener("click",function(){
+handsontable2psv.download(hot);
+ });
+/* function bindDumpButton() {    //・o・・DX樫[・    Handsontable.Dom.addEvent(document.body, 'click', function (e) {
+
+      var element = e.target || e.srcElement;
+
+      if (element.nodeName == "BUTTON" && element.name == 'dump') {
+        var name = element.getAttribute('data-dump');
+        var instance = element.getAttribute('data-instance');
+        var hot = window[instance];
+        console.log('data of ' + name, hot.getData());
+      }
+    });
+  }
+bindDumpButton();    //｢p櫚 */
+
+</script>
+
