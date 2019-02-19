@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="shift_jis" />
+<title>設定</title>
+<style>
+.modal-werden{
+    position:fixed;
+    display:block !important;
+}
+.modal{
+    display:none;
+}
+
+@keyframes fadeIn {
+    0% {opacity: 0}
+    100% {opacity: 1}
+}
+
+@-webkit-keyframes fadeIn {
+    0% {opacity: 0}
+    100% {opacity: 1}
+}
+#設定{
+	width:50%;
+	margin:1.5em auto 0;
+	padding:10px 20px;
+	margin-top: -1px;
+	position: absolute;
+  top: 50%;
+  left: 50%;
+  -ms-transform: translate(-50%,-50%);
+  -webkit-transform : translate(-50%,-50%);
+  transform : translate(-50%,-50%);
+	border:2px solid #aaa;
+	z-index:2;
+	background-color: #99cc00;
+}
+#ueberlagerung{
+	z-index:1;
+	top:0;
+	left:0;
+	width:100%;
+	height:120%;
+	background-color:rgba(0,0,0,0.75);
+}
+#ueberlagerung:hover{
+  opacity:0.5;
+  transition:all 0.3s;
+}
+
+/* ▼タブ */
+#設定 #tabcontrol a{
+   display: inline-block;            /* インラインブロック化 */
+   border-width: 1px 1px 0px 1px;    /* 下以外の枠線を引く */
+   border-style: solid;              /* 枠線の種類：実線 */
+   border-color: black;              /* 枠線の色：黒色 */
+   border-radius: 0.75em 0.75em 0 0; /* 枠線の左上角と右上角だけを丸く */
+   padding: 0.75em 1em;              /* 内側の余白 */
+   text-decoration: none;            /* リンクの下線を消す */
+   color: black;                     /* 文字色：黒色 */
+   font-weight: bold;                /* 太字 */
+   position: relative;               /* JavaScriptでz-indexを調整するために必要 */
+}
+/* ▼タブにマウスポインタが載った際(任意) */
+#tabcontrol a:hover {
+   text-decoration: underline;       /* 文字に下線を引く */
+}
+.入力{background-color: #ff4500;}
+.入力 #出力オプション{display:none;}
+.共通{background-color: #ffd700;}
+.共通 #出力オプション{display:none;}
+.出力{background-color: #40ff00;}
+.出力 #出力オプション{display:block;}
+/* ▼タブの中身 */
+#tabbody {
+   border-width: 1px 1px 0px 1px;    /* 下以外の枠線を引く */
+   margin-top: -1px;        /* 上側にあるタブと1pxだけ重ねるために「-1px」を指定 */
+   padding: 1em;            /* 内側の余白量 */
+   position: relative;      /* z-indexを調整するために必要 */
+   z-index: 3;              /* 重なり順序を「最も背面」にするため */
+}
+</style>
+</head>
+<body>
+    <div id="ueberlagerung" class="modal"></div>
+    <div id="設定" class="modal">
+        <div id="tabcontrol"><a class="入力" onclick=changeTab(this.className)>入力</a><a class="共通" onclick=changeTab(this.className)>共通</a><a class="出力" onclick=changeTab(this.className)>出力</a></div><!--あまり改変することがなかった。ありがたい。https://allabout.co.jp/gm/gc/23969/-->
+        <div id="tabbody" class="共通">
+            <p>国:
+            <select id="国">
+                <option value="AUTO">(AUTO)</option>
+                <option value="nippon">日本</option>
+                <option value="LF">sonota</option>
+            </select>
+            </p>
+            <p>改行コード:
+            <select id="改行コード">
+                <option value="AUTO">(AUTO)</option>
+                <option value="CRLF">CR+LF</option>
+                <option value="LF">LF (UNIX)</option>
+                <option value="CR">CR (Mac)</option>
+            </select>
+            </p>
+            <p>符号化方式:
+            <select id="符号化方式">
+                <option value="AUTO">(AUTO)</option>
+                <option value="Shift_JIS">SJIS</option>
+                <option value="JIS">JIS</option>   <!--//{KkJIS_X0201 JIS_EncodinghKBc_iso-2022-jpとは違うらしいが結局わからず-->
+                <option value="EUC-JP">EUC</option>
+                <option value="UTF-16">Unicode</option>
+                <option value="UTF-16BE">UnicodeBE</option>
+                <option value="UTF-8">UTF-8</option>
+                <option value="UTF-7">UTF-7(非推奨)</option>
+                <option value="ISO-8859-1">Latin1(非推奨)</option>
+            </select>
+            </p>
+            <p>区切り文字:
+            <select id="区切り文字">
+                <option value="AUTO">(拡張子から判断)</option>
+                <option value="P">可変長空白 - P*-separated values(PSV)</option> <!--//padding,python,producer,八王子リスペクトetc...-->
+                <option value="0x2C">カンマ - comma-separated values(CSV)</option>
+                <option value="0x09">タブ - tab-separated values (TSV)</option>
+                <option value="0x20">スペース - space-separated values (SSV)</option>
+                <option value="0x3B">セミコロン - semicolon-separated values (SSV)</option>
+                <option value="0x3A">コロン - colon-separated values (CSV)</option>
+            </select>  
+            </p>
+            <p id="出力オプション">出力オプション:
+            <select id="整形方法">
+                <option value="">なし</option>
+                <option value="html">htmlテーブル      </option>
+                <option value="github">githubの表組み記法</option>
+                <option value="hatena">はてなの表組み記法</option>
+            </select>  
+            </p>         
+            <label for="出力確認">
+                <input type="checkbox" checked="checked" id="出力確認" value=1>文字コードに合わせたバイト数で計算
+            </label>
+            </p>
+            <p>
+            <label for="頭確認">
+               <input type="checkbox" checked="checked" id="頭確認" value=1>ヘッダーを含める
+            </label>
+            </p>
+            <p>
+            <label for="間隔数">インデントの数:<input type="number" id="間隔数" value=4 min=1>  <!--//windowsphone iphone androidでは電話番号になり同じ数字を二回も打つ必要がなくなるぞ-->
+            </label>
+            </p>
+            <p>
+            <label for="タブの大きさ">タブの大きさ:<input type="number" id="タブの大きさ" value=4 min=1>
+            </label>
+            </p>
+        </div>
+    </div>
+    <p><input type="button" id="modal-open" class="button-link" value="設定"/></p>
+    <div id="handsontable" class="handsontable"></div>
+    <script>
+    //https://syncer.jp/jquery-modal-window 一応参考にしたもの
+    window.onload = function(){
+    var modi=document.getElementsByClassName( "modal" ) ;
+       document.getElementById('ueberlagerung').addEventListener("click", function () {  
+           Object.keys(modi).forEach(function( modos ) {
+               document.getElementById(modos).classList.toggle( "modal-werden" ) ;
+               this.blur();
+               document.getElementById(modos).style.animation="fadeIn 0.5s ease 0s 1 normal";
+           });
+       });
+     }
+        document.getElementById('modal-open').addEventListener("click", function () {
+            var modi=document.getElementsByClassName( "modal" ) ;  //modalが形式のとかそういう形容詞なら名詞の複数形はこのようになるのか。modalにsをつけて複数形というのは安直で気に入らない。
+            var ueberlagerung = document.getElementById("ueberlagerung")
+            var 設定 = document.getElementById("設定")
+
+            Object.keys(modi).forEach(function( modus ) {
+                document.getElementById(modus).classList.toggle( "modal-werden" ) ;//modusはオブジェクトとならずIDの名前を返す
+                this.blur();
+                document.getElementById(modus).style.animation="fadeIn 0.5s ease 0s 1 normal";
+
+            });
+
+        })
+    function changeTab(tabclass) {
+    document.getElementById('tabbody').className=tabclass
+    }
+
+    </script>
+</body>
+</html>
